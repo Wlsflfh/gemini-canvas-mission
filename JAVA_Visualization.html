@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Backend AI Learning Mentor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f1f5f9;
+        }
+
+        .node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .node:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .active-node {
+            border: 3px solid #3b82f6 !important;
+            background-color: #eff6ff !important;
+        }
+
+        .active-node::after {
+            content: '▼';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #3b82f6;
+            font-size: 12px;
+        }
+
+        .hidden { display: none; }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .explanation-card {
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        pre {
+            tab-size: 4;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+<div class="max-w-6xl mx-auto">
+    <!-- 상단 헤더 -->
+    <header class="mb-8 text-center">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+            ☕ Java Backend <span class="text-blue-600">AI Mentor</span>
+        </h1>
+        <p class="text-gray-600">전문가의 상세 해설로 학습하고, Gemini AI가 생성하는 실시간 퀴즈에 도전하세요.</p>
+    </header>
+
+    <div id="main-container" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- 좌측: 시각화 및 상세 해설 -->
+        <div id="viz-section" class="lg:col-span-2 space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h2 class="text-lg font-bold mb-4 flex items-center">
+                    <span class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
+                    계층 선택 및 구조 보기
+                </h2>
+                <div class="relative w-full aspect-video bg-slate-50 rounded-xl overflow-hidden flex flex-col items-center justify-around py-6 border border-slate-200">
+                    <div id="node-client" class="node w-48 p-3 bg-white border-2 border-gray-200 rounded-lg text-center" onclick="selectConcept('client')">
+                        <span class="text-[10px] font-bold text-blue-500 uppercase">External</span>
+                        <div class="text-md font-bold text-gray-700">Client</div>
+                    </div>
+                    <div class="h-6 border-l-2 border-dashed border-gray-300"></div>
+                    <div id="node-controller" class="node w-60 p-3 bg-white border-2 border-gray-200 rounded-lg text-center" onclick="selectConcept('controller')">
+                        <span class="text-[10px] font-bold text-green-500 uppercase">Presentation</span>
+                        <div class="text-md font-bold text-gray-700">Controller</div>
+                    </div>
+                    <div class="h-6 border-l-2 border-dashed border-gray-300"></div>
+                    <div id="node-service" class="node w-60 p-3 bg-white border-2 border-gray-200 rounded-lg text-center" onclick="selectConcept('service')">
+                        <span class="text-[10px] font-bold text-purple-500 uppercase">Business</span>
+                        <div class="text-md font-bold text-gray-700">Service</div>
+                    </div>
+                    <div class="h-6 border-l-2 border-dashed border-gray-300"></div>
+                    <div id="node-repository" class="node w-60 p-3 bg-white border-2 border-gray-200 rounded-lg text-center" onclick="selectConcept('repository')">
+                        <span class="text-[10px] font-bold text-orange-500 uppercase">Persistence</span>
+                        <div class="text-md font-bold text-gray-700">Repository</div>
+                    </div>
+                    <div class="h-6 border-l-2 border-dashed border-gray-300"></div>
+                    <div id="node-database" class="node w-48 p-3 bg-slate-800 text-white rounded-lg text-center" onclick="selectConcept('database')">
+                        <div class="text-md font-bold">Database</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 전문가 상세 해설 (복원 및 강화) -->
+            <div id="explanation-section" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hidden explanation-card">
+                <div class="flex justify-between items-start mb-6">
+                    <h2 class="text-2xl font-bold flex items-center text-blue-600">
+                        <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm mr-3">2</span>
+                        <span id="exp-title">전문가 개념 해설</span>
+                    </h2>
+                    <span id="exp-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-tighter">Category</span>
+                </div>
+
+                <div id="exp-content" class="space-y-6">
+                    <div class="prose prose-slate max-w-none">
+                        <p id="exp-intro" class="text-lg text-slate-700 leading-relaxed font-medium border-l-4 border-blue-500 pl-4"></p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                                <h4 class="font-bold text-slate-800 mb-3 flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    주요 역할과 특징
+                                </h4>
+                                <ul id="exp-roles" class="text-sm text-slate-600 space-y-2"></ul>
+                            </div>
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                                <h4 class="font-bold text-slate-800 mb-3 flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    실무 포인트 (Pro Tip)
+                                </h4>
+                                <p id="exp-pro-tip" class="text-sm text-slate-600 leading-relaxed"></p>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 bg-gray-900 rounded-xl p-5 shadow-inner">
+                            <h4 class="text-xs font-bold text-blue-400 uppercase mb-3 tracking-widest">실제 구현 예시 (Java/Spring)</h4>
+                            <pre id="exp-code" class="text-xs text-blue-100 font-mono leading-relaxed overflow-x-auto whitespace-pre"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: AI 퀴즈 섹션 -->
+        <div id="side-section" class="space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-gray-100 sticky top-8">
+                <h2 class="text-lg font-bold mb-4 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="bg-orange-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">3</span>
+                        AI 동적 퀴즈
+                    </div>
+                    <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">GEMINI AI</span>
+                </h2>
+
+                <div id="quiz-intro" class="text-center py-10">
+                    <div class="text-5xl mb-4">🤖</div>
+                    <p class="text-gray-600 mb-6 font-medium leading-relaxed">전문가 해설을 충분히 읽으셨나요?<br>AI가 매번 새로운 문제를 생성합니다.</p>
+                    <button onclick="generateAIQuiz()" id="start-btn" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                        AI 퀴즈 시작하기
+                    </button>
+                </div>
+
+                <div id="quiz-loading" class="hidden flex flex-col items-center py-20 text-center">
+                    <div class="loading-spinner mb-4"></div>
+                    <p class="text-sm text-gray-500 animate-pulse">AI가 상세 해설 내용을 바탕으로<br>변별력 있는 문제를 생성 중입니다...</p>
+                </div>
+
+                <div id="quiz-container" class="hidden">
+                    <div class="mb-4 flex justify-between items-center text-xs font-bold text-gray-400 uppercase tracking-widest border-b pb-2">
+                        <span id="quiz-progress">Question 1 / 3</span>
+                    </div>
+                    <div id="quiz-question" class="text-lg font-bold text-gray-800 mb-6 leading-snug"></div>
+                    <div id="quiz-options" class="space-y-3"></div>
+
+                    <div id="hint-area" class="mt-8 pt-4 border-t border-slate-100">
+                        <button id="hint-btn" onclick="getAIHint()" class="text-xs font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-2 rounded-lg w-full justify-center">
+                            💡 AI 멘토에게 힌트 요청하기
+                        </button>
+                        <div id="hint-text" class="hidden mt-3 p-3 bg-blue-50 text-blue-700 text-xs rounded-lg leading-relaxed border border-blue-100 italic"></div>
+                        <div id="hint-loading" class="hidden mt-3 text-center text-[10px] text-gray-400">AI가 문맥을 분석하여 힌트를 작성 중...</div>
+                    </div>
+                </div>
+
+                <div id="result-container" class="hidden text-center py-6">
+                    <div id="result-emoji" class="text-6xl mb-4">🎉</div>
+                    <h3 class="text-2xl font-bold mb-2">테스트 결과</h3>
+                    <div id="result-score" class="text-4xl font-bold text-blue-600 mb-6">0 / 100</div>
+
+                    <div class="bg-slate-50 p-5 rounded-xl text-left mb-6 border border-slate-100">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">AI 개인화 가이드</h4>
+                        <div id="ai-feedback-loading" class="text-xs text-gray-400 italic">AI가 성적을 분석하여 가이드를 작성 중입니다...</div>
+                        <p id="ai-feedback-text" class="text-sm text-slate-700 leading-relaxed hidden"></p>
+                    </div>
+
+                    <button onclick="restartApp()" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition">다시 학습하기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const apiKey = ""; // Runtime provides API key
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'java-backend-mentor';
+
+    const conceptData = {
+        client: {
+            title: "Client (클라이언트)",
+            badge: "External Environment",
+            intro: "사용자가 백엔드 서버와 소통하는 유일한 관문입니다. 브라우저, 모바일 앱뿐만 아니라 다른 서버 시스템이 클라이언트가 될 수도 있습니다.",
+            roles: [
+                "사용자 입력 수집 및 HTTP 요청(Request) 생성",
+                "서버 응답(JSON/HTML) 시각화 및 UX 제공",
+                "브라우저 레벨의 1차 유효성 검증 수행",
+                "Cookie/Local Storage를 활용한 클라이언트 상태 유지"
+            ],
+            proTip: "실무에서 클라이언트는 '신뢰할 수 없는 영역'입니다. 악의적인 사용자가 브라우저 도구를 통해 데이터를 조작할 수 있으므로, 반드시 서버에서 2차 검증을 거쳐야 합니다.",
+            code: "// Browser Console Fetch Example\nfetch('https://api.myapp.com/users/1')\n  .then(response => response.json())\n  .then(data => {\n      // 데이터를 화면에 바인딩\n      console.log('User Name:', data.name);\n  });",
+            quizHint: "사용자와 직접 맞닿아 있는 계층이 어디인지 생각해보세요."
+        },
+        controller: {
+            title: "Controller (컨트롤러)",
+            badge: "Presentation Layer",
+            intro: "백엔드 시스템의 '안내소'입니다. 클라이언트의 요청을 가장 먼저 받아 분석하고, 어떤 비즈니스 로직(서비스)을 실행할지 결정합니다.",
+            roles: [
+                "URL 경로 매핑 및 HTTP 메서드(GET, POST 등) 구분",
+                "요청 파라미터(@RequestParam, @RequestBody) 수집 및 바인딩",
+                "형식적 데이터 유효성 검사 (@Valid 활용)",
+                "처리 결과를 바탕으로 적절한 HTTP 상태 코드와 함께 데이터 반환"
+            ],
+            proTip: "컨트롤러는 가능한 '가벼워야' 합니다(Thin Controller). 복잡한 계산이나 정책 결정 로직은 서비스 계층으로 넘기고, 컨트롤러는 오직 '흐름 제어'에만 집중하는 것이 유지보수에 유리합니다.",
+            code: "@RestController\n@RequestMapping(\"/api/users\")\npublic class UserController {\n    private final UserService userService;\n\n    @PostMapping\n    public ResponseEntity<UserResponse> join(@Valid @RequestBody JoinRequest req) {\n        // 로직은 서비스에 위임\n        UserResponse res = userService.register(req);\n        return ResponseEntity.status(HttpStatus.CREATED).body(res);\n    }\n}",
+            quizHint: "HTTP 요청의 진입점(Entry Point)이자 라우팅을 담당하는 계층을 떠올려 보세요."
+        },
+        service: {
+            title: "Service (서비스)",
+            badge: "Business Layer",
+            intro: "애플리케이션의 핵심 로직이 살아 움직이는 '심장부'입니다. 실제 업무 규칙을 정의하며 데이터의 정합성을 보장하는 가장 중요한 역할을 수행합니다.",
+            roles: [
+                "핵심 비즈니스 로직(업무 규칙) 구현",
+                "트랜잭션(@Transactional) 관리를 통한 작업의 원자성 보장",
+                "여러 리포지토리를 호출하여 복합적인 데이터 처리",
+                "도메인 객체 간의 유기적인 협력 조율"
+            ],
+            proTip: "서비스 계층은 기술적 구현(DB 접근 방식 등)보다는 '비즈니스 언어'에 가까워야 합니다. 트랜잭션의 범위를 너무 크게 잡으면 성능 저하를 초래할 수 있으므로 적절한 설계가 필요합니다.",
+            code: "@Service\n@RequiredArgsConstructor\npublic class UserService {\n    private final UserRepository userRepository;\n\n    @Transactional\n    public UserResponse register(JoinRequest req) {\n        // 1. 중복 가입 체크 (비즈니스 로직)\n        if (userRepository.existsByEmail(req.getEmail())) {\n            throw new DuplicateUserException();\n        }\n        // 2. 저장 (영속성 계층 호출)\n        User user = userRepository.save(req.toEntity());\n        return UserResponse.from(user);\n    }\n}",
+            quizHint: "데이터의 무결성을 위해 @Transactional을 주로 어디에 사용하는지 생각해보세요."
+        },
+        repository: {
+            title: "Repository (리포지토리)",
+            badge: "Persistence Layer",
+            intro: "자바 객체와 물리적인 데이터베이스 사이를 연결하는 '가교'입니다. 데이터의 저장과 조회를 객체지향적인 방식으로 추상화합니다.",
+            roles: [
+                "데이터베이스(DB)와의 CRUD 통신 전담",
+                "엔티티(Entity) 객체와 DB 레코드 간 매핑",
+                "Spring Data JPA를 활용한 동적 쿼리 생성",
+                "복잡한 조회 로직(QueryDSL 등) 처리"
+            ],
+            proTip: "JPA를 사용할 때 흔히 발생하는 N+1 문제를 리포지토리 설계 단계에서 고려해야 합니다. fetch join 등을 적절히 사용하여 쿼리 성능을 최적화하는 것이 시니어 개발자의 핵심 역량입니다.",
+            code: "public interface UserRepository extends JpaRepository<User, Long> {\n    // 메서드 이름만으로 쿼리 자동 생성\n    Optional<User> findByEmail(String email);\n\n    // JPQL 또는 네이티브 쿼리 사용\n    @Query(\"select u from User u join fetch u.orders where u.id = :id\")\n    Optional<User> findByIdWithOrders(@Param(\"id\") Long id);\n}",
+            quizHint: "Java 객체를 DB에 영구적으로 저장하기 위해 거쳐가는 관문은 어디일까요?"
+        },
+        database: {
+            title: "Database (데이터베이스)",
+            badge: "Storage Layer",
+            intro: "모든 정보가 최종적으로 안전하게 기록되는 '저장 창고'입니다. 서버가 꺼져도 데이터가 보존되는 신뢰의 원천입니다.",
+            roles: [
+                "데이터의 영구적인 보관 및 관리",
+                "PK, FK 등 제약 조건을 통한 데이터 무결성 보장",
+                "인덱스(Index)를 활용한 대용량 데이터 검색 속도 확보",
+                "동시성 제어를 통해 다수의 사용자가 동시에 접근해도 문제없도록 관리"
+            ],
+            proTip: "좋은 인덱스 설계는 열 마디 코드보다 성능 향상에 큰 도움이 됩니다. 하지만 과도한 인덱스는 쓰기 성능을 떨어뜨리므로 서비스의 읽기/쓰기 비중을 잘 분석해야 합니다.",
+            code: "-- SQL Schema Example\nCREATE TABLE users (\n    id BIGINT AUTO_INCREMENT PRIMARY KEY,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    name VARCHAR(100),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    INDEX idx_email (email)\n);",
+            quizHint: "쿼리(SQL) 언어를 통해 직접적으로 데이터를 다루는 물리적 대상을 떠올려 보세요."
+        }
+    };
+
+    let generatedQuizzes = [];
+    let currentQuizIndex = 0;
+    let score = 0;
+
+    async function callGemini(prompt, isJson = false) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: isJson ? { responseMimeType: "application/json" } : {}
+        };
+
+        for (let i = 0; i < 5; i++) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch (e) {
+                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+            }
+        }
+        throw new Error("AI 호출 실패");
+    }
+
+    function selectConcept(id) {
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('active-node'));
+        document.getElementById(`node-${id}`).classList.add('active-node');
+
+        const section = document.getElementById('explanation-section');
+        section.classList.remove('hidden');
+
+        const data = conceptData[id];
+        document.getElementById('exp-title').innerText = data.title;
+        document.getElementById('exp-badge').innerText = data.badge;
+        document.getElementById('exp-intro').innerText = data.intro;
+        document.getElementById('exp-pro-tip').innerText = data.proTip;
+        document.getElementById('exp-roles').innerHTML = data.roles.map(r => `<li>• ${r}</li>`).join('');
+        document.getElementById('exp-code').innerText = data.code;
+
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function generateAIQuiz() {
+        document.getElementById('quiz-intro').classList.add('hidden');
+        document.getElementById('quiz-loading').classList.remove('hidden');
+
+        const systemPrompt = `
+                너는 Java 백엔드 교육 전문가야. 다음 개념들을 기반으로 깊이 있는 객관식 퀴즈 3문제를 만들어줘: ${JSON.stringify(conceptData)}.
+                단순 암기보다 개념의 전반적인 이해를 묻는 문제로 생성해.
+                JSON 형식 응답: { "quizzes": [{ "question": "", "options": ["", "", "", ""], "answer": "", "hint": "" }] }
+                질문과 옵션은 한국어로 작성해줘.
+            `;
+
+        try {
+            const result = await callGemini(systemPrompt, true);
+            const data = JSON.parse(result);
+            generatedQuizzes = data.quizzes;
+            currentQuizIndex = 0;
+            score = 0;
+
+            document.getElementById('quiz-loading').classList.add('hidden');
+            document.getElementById('quiz-container').classList.remove('hidden');
+            loadQuiz();
+        } catch (err) {
+            alert("AI가 문제를 생성하는 도중 오류가 발생했습니다. 다시 시도해주세요.");
+            restartApp();
+        }
+    }
+
+    function loadQuiz() {
+        const quiz = generatedQuizzes[currentQuizIndex];
+        document.getElementById('quiz-progress').innerText = `Question ${currentQuizIndex + 1} / ${generatedQuizzes.length}`;
+        document.getElementById('quiz-question').innerText = quiz.question;
+
+        const optionsDiv = document.getElementById('quiz-options');
+        optionsDiv.innerHTML = '';
+
+        quiz.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = "w-full p-4 text-left border-2 border-slate-100 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-semibold text-slate-700";
+            btn.innerText = opt;
+            btn.onclick = () => handleAnswer(opt);
+            optionsDiv.appendChild(btn);
+        });
+
+        document.getElementById('hint-text').classList.add('hidden');
+        document.getElementById('hint-btn').classList.remove('hidden');
+    }
+
+    async function getAIHint() {
+        const hintBtn = document.getElementById('hint-btn');
+        const hintLoading = document.getElementById('hint-loading');
+        const hintText = document.getElementById('hint-text');
+
+        hintBtn.classList.add('hidden');
+        hintLoading.classList.remove('hidden');
+
+        const quiz = generatedQuizzes[currentQuizIndex];
+        const prompt = `질문: "${quiz.question}"에 대한 힌트를 줘. 정답을 말하지 말고, 개념적인 원리를 상기시켜주는 친절한 힌트를 한국어로 2문장 내외로 작성해.`;
+
+        try {
+            const hint = await callGemini(prompt);
+            hintText.innerText = "💡 " + hint;
+        } catch (e) {
+            hintText.innerText = "💡 " + quiz.hint;
+        } finally {
+            hintLoading.classList.add('hidden');
+            hintText.classList.remove('hidden');
+        }
+    }
+
+    function handleAnswer(selected) {
+        const correct = generatedQuizzes[currentQuizIndex].answer;
+        if (selected === correct) score += (100 / generatedQuizzes.length);
+
+        currentQuizIndex++;
+        if (currentQuizIndex < generatedQuizzes.length) {
+            loadQuiz();
+        } else {
+            showFinalResult();
+        }
+    }
+
+    async function showFinalResult() {
+        document.getElementById('quiz-container').classList.add('hidden');
+        document.getElementById('result-container').classList.remove('hidden');
+        document.getElementById('result-score').innerText = `${Math.round(score)} / 100`;
+
+        const feedbackText = document.getElementById('ai-feedback-text');
+        const feedbackLoading = document.getElementById('ai-feedback-loading');
+
+        const prompt = `Java 백엔드 퀴즈 점수: ${score}/100. 전문가로서 학습자에게 따뜻한 격려와 취약점 보완 가이드를 한국어 3문장 이내로 작성해줘.`;
+
+        try {
+            const feedback = await callGemini(prompt);
+            feedbackText.innerText = feedback;
+            feedbackLoading.classList.add('hidden');
+            feedbackText.classList.remove('hidden');
+        } catch (e) {
+            feedbackText.innerText = "고생하셨습니다! 부족한 부분을 다시 읽고 재도전 해보세요.";
+            feedbackLoading.classList.add('hidden');
+            feedbackText.classList.remove('hidden');
+        }
+    }
+
+    function restartApp() {
+        location.reload();
+    }
+</script>
+</body>
+</html>

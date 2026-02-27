@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>사과 게임: 점령</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nosifer&family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+        body {
+            background-color: #0a0a0a;
+            font-family: 'Noto Sans KR', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            overflow-y: auto;
+            color: #e5e7eb;
+        }
+
+        .scary-title { font-family: 'Nosifer', cursive; color: #ff0000; text-shadow: 0 0 15px #ff0000; }
+
+        .cell {
+            user-select: none;
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            z-index: 10;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .cell-player1 { background-color: #2563eb !important; color: white !important; box-shadow: inset 0 0 12px rgba(0,0,0,0.3); }
+        .cell-player2 { background-color: #dc2626 !important; color: white !important; box-shadow: inset 0 0 12px rgba(0,0,0,0.3); }
+
+        .grid-container {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 17 / 10;
+            position: relative;
+            margin: 0 auto;
+            border: 2px solid #333;
+        }
+
+        .mushroom-claimed { font-weight: 400; transform: scale(0.95); opacity: 0.25 !important; }
+        .cell-highlight { background-color: var(--highlight-bg) !important; box-shadow: inset 0 0 0 2px var(--highlight-border); }
+
+        #drag-overlay {
+            position: absolute;
+            border: 2px solid var(--highlight-border);
+            background-color: var(--highlight-bg);
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+        }
+
+        #board-wrapper { touch-action: none; }
+
+        .start-screen {
+            position: fixed; inset: 0; background: radial-gradient(circle, #1a1a1a 0%, #000000 100%);
+            z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+        }
+
+        .btn-horror {
+            background: linear-gradient(145deg, #440000, #220000);
+            border: 1px solid #660000;
+            color: #ff4444;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px #000;
+            font-family: 'Nosifer', cursive;
+        }
+        .btn-horror:hover {
+            background: #660000;
+            color: #fff;
+            box-shadow: 0 0 20px #ff0000;
+            transform: scale(1.02);
+        }
+
+        .btn-normal {
+            background: #2563eb;
+            color: white;
+            transition: all 0.3s;
+            border-bottom: 4px solid #1d4ed8;
+        }
+        .btn-normal:hover {
+            background: #3b82f6;
+            transform: translateY(-2px);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal-animate {
+            animation: popIn 0.2s ease-out forwards;
+        }
+    </style>
+</head>
+<body style="--highlight-bg: rgba(59, 130, 246, 0.2); --highlight-border: #3b82f6;">
+
+<!-- 시작 화면 -->
+<div id="start-screen" class="start-screen">
+    <h1 class="scary-title text-5xl md:text-7xl mb-6 text-center">사과 게임<br><span class="text-3xl md:text-5xl">점령</span></h1>
+
+    <!-- 규칙 보기 버튼 -->
+    <button onclick="toggleRules(true)" class="mb-10 px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full text-sm font-bold border border-zinc-600 transition-all">
+        📜 게임 규칙 확인하기
+    </button>
+
+    <div id="main-menu" class="flex flex-col gap-4 w-full max-w-sm items-center">
+        <button onclick="startGame('2P')" class="btn-normal w-full py-5 rounded-2xl font-black text-xl shadow-2xl">
+            2P MODE (로컬 대전)
+        </button>
+        <button onclick="showAiOptions()" class="btn-horror w-full py-5 rounded-2xl font-black text-xl shadow-2xl">
+            VS AI
+        </button>
+    </div>
+
+    <!-- AI 난이도 선택 (처음엔 숨김) -->
+    <div id="ai-menu" class="hidden flex flex-col gap-4 w-full max-w-sm items-center">
+        <h2 class="text-red-500 font-bold mb-2">AI 난이도를 선택하세요</h2>
+        <button onclick="startGame('AI', 'EASY')" class="w-full py-4 bg-green-900/50 hover:bg-green-800 text-green-400 border border-green-700 rounded-2xl font-bold text-lg transition-all">
+            EASY MODE (쉬움)
+        </button>
+        <button onclick="startGame('AI', 'HARD')" class="btn-horror w-full py-4 rounded-2xl font-black text-lg shadow-2xl">
+            HARD MODE (매우 어려움)
+        </button>
+        <button onclick="showMainMenu()" class="mt-4 text-zinc-500 hover:text-zinc-300 text-sm underline">
+            뒤로 가기
+        </button>
+    </div>
+</div>
+
+<!-- 규칙 모달 (비율 수정됨) -->
+<div id="rules-modal" class="fixed inset-0 bg-black/95 hidden z-[600] items-center justify-center p-4">
+    <div class="bg-zinc-900 border-2 border-zinc-700 w-full max-w-lg rounded-3xl p-6 md:p-8 overflow-y-auto modal-animate relative shadow-2xl">
+        <button onclick="toggleRules(false)" class="absolute top-4 right-6 text-3xl text-zinc-500 hover:text-white">&times;</button>
+        <h2 class="text-2xl md:text-3xl font-black text-white mb-6 border-b border-zinc-700 pb-4 text-center">게임 규칙</h2>
+        <div class="space-y-6 text-zinc-300 leading-relaxed text-base md:text-lg">
+            <section>
+                <h3 class="text-blue-400 font-bold mb-1 flex items-center gap-2"><span>1.</span> 기본 진행</h3>
+                <p>자신의 턴에 마우스나 터치로 드래그하여 <span class="text-white font-bold underline decoration-blue-500">직사각형 영역</span>을 선택합니다.</p>
+            </section>
+            <section>
+                <h3 class="text-yellow-500 font-bold mb-1 flex items-center gap-2"><span>2.</span> 점령 조건 (합이 10)</h3>
+                <p>선택한 영역 안의 숫자 합이 <span class="text-white font-bold underline decoration-yellow-500">정확히 10</span>이어야 합니다. 직사각형의 네 변에는 각각 최소 하나 이상의 숫자가 포함되어야 합니다.</p>
+            </section>
+            <section>
+                <h3 class="text-red-500 font-bold mb-1 flex items-center gap-2"><span>3.</span> 소유권 뺏기</h3>
+                <p>상대방이 이미 점령한 칸이라도 영역의 합이 10이 된다면 <span class="text-white font-bold underline decoration-red-500">나의 소유</span>로 바뀝니다.</p>
+            </section>
+            <section>
+                <h3 class="text-zinc-400 font-bold mb-1 flex items-center gap-2"><span>4.</span> 게임 종료</h3>
+                <p>더 이상 둘 곳이 없으면 패스하세요. 두 명 모두 연속으로 패스하면 종료되며 <span class="text-white font-bold underline decoration-zinc-500">더 많은 칸을 가진 사람</span>이 승리합니다.</p>
+            </section>
+        </div>
+        <button onclick="toggleRules(false)" class="w-full mt-8 py-4 bg-blue-600 text-white font-bold rounded-2xl active:scale-95 transition-all">알겠습니다!</button>
+    </div>
+</div>
+
+<!-- 게임 화면 -->
+<div class="w-full max-w-2xl bg-zinc-900 rounded-3xl shadow-2xl p-4 mb-10 border border-zinc-800 relative">
+    <div class="flex justify-between items-center mb-4 px-2">
+        <h1 class="text-xl font-black text-white tracking-tighter">사과 게임: <span class="text-red-600">점령</span></h1>
+        <div id="turn-indicator" class="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-blue-900 text-blue-200 border border-blue-700">
+            PLAYER 1 TURN
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <div id="p1-card" class="bg-blue-950/30 p-3 rounded-2xl border-b-4 border-blue-600 transition-all">
+            <p id="p1-name" class="text-[10px] font-bold text-blue-400 uppercase">Player 1</p>
+            <p id="p1-score" class="text-2xl font-black text-blue-400">0</p>
+        </div>
+        <div id="p2-card" class="bg-red-950/30 p-3 rounded-2xl border-b-4 border-red-600 text-right transition-all">
+            <p id="p2-name" class="text-[10px] font-bold text-red-400 uppercase">AI</p>
+            <p id="p2-score" class="text-2xl font-black text-red-400">0</p>
+        </div>
+    </div>
+
+    <div id="board-wrapper" class="grid-container bg-black p-1 rounded-xl mb-5 shadow-inner border-zinc-800">
+        <div id="board" class="grid grid-cols-[repeat(17,minmax(0,1fr))] gap-0.5 w-full h-full relative"></div>
+        <div id="drag-overlay"></div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+        <button id="pass-btn" class="w-full py-4 bg-red-700 hover:bg-red-600 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-all text-lg border-b-4 border-red-900">
+            PASS TURN (턴 넘기기)
+        </button>
+        <button id="reset-btn" class="w-full py-2 bg-zinc-800 text-zinc-400 font-bold rounded-xl text-sm hover:bg-zinc-700">
+            메인으로 이동
+        </button>
+    </div>
+</div>
+
+<!-- 결과 모달 -->
+<div id="overlay" class="fixed inset-0 bg-black/80 hidden z-[300]"></div>
+<div id="result-screen" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-sm rounded-3xl p-8 hidden z-[301] shadow-2xl text-center result-modal border-t-8 border-red-600 bg-zinc-900">
+    <div id="winner-icon" class="text-6xl mb-4">💀</div>
+    <h2 id="result-title" class="text-3xl font-black mb-2 text-white">결과</h2>
+    <p id="result-subtitle" class="text-zinc-400 mb-6 font-medium">점수: 0 vs 0</p>
+    <button onclick="location.reload()" class="w-full py-4 bg-red-700 text-white font-black rounded-2xl hover:bg-red-600 transition-colors">홈으로</button>
+</div>
+
+<div id="toast" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-red-900 text-white text-sm font-bold rounded-full opacity-0 transition-all pointer-events-none z-[200] border border-red-600 shadow-lg">
+    메시지
+</div>
+
+<script>
+    const COLS = 17, ROWS = 10, TARGET_SUM = 10;
+    let board = [], currentPlayer = 1, gameMode = 'AI', aiDifficulty = 'HARD', isDragging = false, startCell = null;
+    let passCount = 0;
+
+    const startScreen = document.getElementById('start-screen');
+    const boardEl = document.getElementById('board');
+    const dragOverlay = document.getElementById('drag-overlay');
+    const turnInd = document.getElementById('turn-indicator');
+    const p1ScoreEl = document.getElementById('p1-score');
+    const p2ScoreEl = document.getElementById('p2-score');
+    const p2NameEl = document.getElementById('p2-name');
+    const toastEl = document.getElementById('toast');
+    const resultScreen = document.getElementById('result-screen');
+    const overlay = document.getElementById('overlay');
+
+    function toggleRules(show) {
+        const modal = document.getElementById('rules-modal');
+        modal.style.display = show ? 'flex' : 'none';
+    }
+
+    function showAiOptions() {
+        document.getElementById('main-menu').classList.add('hidden');
+        document.getElementById('ai-menu').classList.remove('hidden');
+    }
+
+    function showMainMenu() {
+        document.getElementById('ai-menu').classList.add('hidden');
+        document.getElementById('main-menu').classList.remove('hidden');
+    }
+
+    function startGame(mode, diff = 'HARD') {
+        gameMode = mode;
+        aiDifficulty = diff;
+        p2NameEl.textContent = mode === 'AI' ? `AI (${diff})` : 'PLAYER 2';
+        startScreen.style.display = 'none';
+        initGame();
+    }
+
+    function initGame() {
+        resultScreen.classList.add('hidden');
+        overlay.classList.add('hidden');
+        passCount = 0;
+        board = Array.from({ length: ROWS }, () =>
+            Array.from({ length: COLS }, () => ({
+                value: Math.floor(Math.random() * 9) + 1,
+                owner: 0,
+                hasMushroom: true
+            }))
+        );
+        renderBoard();
+        updateScores();
+        currentPlayer = 1;
+        updateTurnUI();
+    }
+
+    function renderBoard() {
+        boardEl.innerHTML = '';
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const cell = document.createElement('div');
+                cell.className = `cell flex items-center justify-center font-bold rounded-sm h-full`;
+                cell.dataset.r = r; cell.dataset.c = c;
+                if (board[r][c].owner === 1) cell.classList.add('cell-player1');
+                else if (board[r][c].owner === 2) cell.classList.add('cell-player2');
+                if (!board[r][c].hasMushroom) cell.classList.add('mushroom-claimed');
+                cell.textContent = board[r][c].value;
+                boardEl.appendChild(cell);
+            }
+        }
+    }
+
+    function updateScores() {
+        let p1 = 0, p2 = 0;
+        board.forEach(row => row.forEach(c => {
+            if (c.owner === 1) p1++;
+            if (c.owner === 2) p2++;
+        }));
+        p1ScoreEl.textContent = p1;
+        p2ScoreEl.textContent = p2;
+        return { p1, p2 };
+    }
+
+    function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.style.opacity = '1';
+        setTimeout(() => toastEl.style.opacity = '0', 1000);
+    }
+
+    function getCellFromEvent(e) {
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const target = document.elementFromPoint(clientX, clientY);
+        if (target && target.closest('.cell')) {
+            const cell = target.closest('.cell');
+            return { r: parseInt(cell.dataset.r), c: parseInt(cell.dataset.c) };
+        }
+        return null;
+    }
+
+    function highlightArea(r1, c1, r2, c2) {
+        document.querySelectorAll('.cell').forEach(el => el.classList.remove('cell-highlight'));
+        const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2), cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+        const boardRect = boardEl.getBoundingClientRect();
+        const cellW = boardRect.width / COLS, cellH = boardRect.height / ROWS;
+        dragOverlay.style.display = 'block';
+        dragOverlay.style.top = (rMin * cellH) + 'px';
+        dragOverlay.style.left = (cMin * cellW) + 'px';
+        dragOverlay.style.width = ((cMax - cMin + 1) * cellW) + 'px';
+        dragOverlay.style.height = ((rMax - rMin + 1) * cellH) + 'px';
+        for (let r = rMin; r <= rMax; r++) {
+            for (let c = cMin; c <= cMax; c++) {
+                const el = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+                if (el) el.classList.add('cell-highlight');
+            }
+        }
+    }
+
+    function checkRect(r1, c1, r2, c2) {
+        const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2), cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+        let sum = 0, edgeT = false, edgeB = false, edgeL = false, edgeR = false, hasNewMushroom = false;
+        for (let r = rMin; r <= rMax; r++) {
+            for (let c = cMin; c <= cMax; c++) {
+                if (board[r][c].hasMushroom) {
+                    sum += board[r][c].value;
+                    hasNewMushroom = true;
+                    if (r === rMin) edgeT = true;
+                    if (r === rMax) edgeB = true;
+                    if (c === cMin) edgeL = true;
+                    if (c === cMax) edgeR = true;
+                }
+            }
+        }
+        return sum === TARGET_SUM && hasNewMushroom && edgeT && edgeB && edgeL && edgeR;
+    }
+
+    function validateAndApply(r1, c1, r2, c2, player) {
+        if (checkRect(r1, c1, r2, c2)) {
+            for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
+                for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+                    board[r][c].owner = player;
+                    board[r][c].hasMushroom = false;
+                }
+            }
+            passCount = 0;
+            return true;
+        }
+        return false;
+    }
+
+    function checkValidMoveExists() {
+        for (let r1 = 0; r1 < ROWS; r1++) {
+            for (let c1 = 0; c1 < COLS; c1++) {
+                for (let r2 = r1; r2 < ROWS; r2++) {
+                    for (let c2 = c1; c2 < COLS; c2++) {
+                        if (checkRect(r1, c1, r2, c2)) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function showResult(p1, p2) {
+        const title = document.getElementById('result-title');
+        const sub = document.getElementById('result-subtitle');
+        const icon = document.getElementById('winner-icon');
+        overlay.classList.remove('hidden');
+        resultScreen.classList.remove('hidden');
+        sub.textContent = `${p1} : ${p2}`;
+        if (p1 > p2) {
+            title.textContent = (gameMode === '2P' ? "Player 1" : "나") + "의 승리!";
+            title.style.color = "#3b82f6";
+            icon.textContent = "🏆";
+        } else if (p2 > p1) {
+            title.textContent = (gameMode === '2P' ? "Player 2" : "AI") + "의 승리!";
+            title.style.color = "#ef4444";
+            icon.textContent = "💀";
+        } else {
+            title.textContent = "무승부";
+            title.style.color = "#ffffff";
+            icon.textContent = "⚖️";
+        }
+    }
+
+    function nextTurn() {
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        updateTurnUI();
+        const allClaimed = board.every(row => row.every(c => !c.hasMushroom));
+        if (passCount >= 2 || allClaimed || !checkValidMoveExists()) {
+            const { p1, p2 } = updateScores();
+            showResult(p1, p2);
+            return;
+        }
+        if (gameMode === 'AI' && currentPlayer === 2) {
+            setTimeout(aiMove, 800);
+        }
+    }
+
+    function updateTurnUI() {
+        const isP1 = currentPlayer === 1;
+        const name = isP1 ? "PLAYER 1" : (gameMode === 'AI' ? "AI" : "PLAYER 2");
+        if (isP1) {
+            document.body.style.setProperty('--highlight-bg', 'rgba(59, 130, 246, 0.2)');
+            document.body.style.setProperty('--highlight-border', '#3b82f6');
+        } else {
+            document.body.style.setProperty('--highlight-bg', 'rgba(239, 68, 68, 0.2)');
+            document.body.style.setProperty('--highlight-border', '#ef4444');
+        }
+        turnInd.textContent = name + " TURN";
+        turnInd.className = isP1
+            ? "px-3 py-1 rounded-full text-[10px] font-bold bg-blue-900 text-blue-200 border border-blue-700"
+            : "px-3 py-1 rounded-full text-[10px] font-bold bg-red-900 text-red-200 border border-red-700";
+        boardEl.style.pointerEvents = (gameMode === 'AI' && !isP1) ? 'none' : 'auto';
+        document.getElementById('p1-card').style.opacity = isP1 ? '1' : '0.4';
+        document.getElementById('p2-card').style.opacity = !isP1 ? '1' : '0.4';
+    }
+
+    function aiMove() {
+        const moves = [];
+        for (let r1 = 0; r1 < ROWS; r1++) {
+            for (let c1 = 0; c1 < COLS; c1++) {
+                for (let r2 = r1; r2 < Math.min(r1 + 8, ROWS); r2++) {
+                    for (let c2 = c1; c2 < Math.min(c1 + 8, COLS); c2++) {
+                        if (checkRect(r1, c1, r2, c2)) {
+                            moves.push({ r1, c1, r2, c2, size: (r2-r1+1)*(c2-c1+1) });
+                        }
+                    }
+                }
+            }
+        }
+
+        if (moves.length > 0) {
+            let selectedMove;
+            if (aiDifficulty === 'EASY') {
+                if (Math.random() < 0.7) {
+                    selectedMove = moves[Math.floor(Math.random() * moves.length)];
+                } else {
+                    selectedMove = moves.sort((a, b) => a.size - b.size)[0];
+                }
+            } else {
+                selectedMove = moves.sort((a, b) => b.size - a.size)[0];
+            }
+            validateAndApply(selectedMove.r1, selectedMove.c1, selectedMove.r2, selectedMove.c2, 2);
+            renderBoard(); updateScores(); nextTurn();
+        } else {
+            passCount++;
+            showToast("AI가 패스했습니다.");
+            nextTurn();
+        }
+    }
+
+    const handleStart = (e) => {
+        if (gameMode === 'AI' && currentPlayer === 2) return;
+        const cell = getCellFromEvent(e);
+        if (cell) { isDragging = true; startCell = cell; highlightArea(cell.r, cell.c, cell.r, cell.c); }
+    };
+    const handleMove = (e) => {
+        if (!isDragging || !startCell) return;
+        const currentCell = getCellFromEvent(e);
+        if (currentCell) highlightArea(startCell.r, startCell.c, currentCell.r, currentCell.c);
+    };
+    const handleEnd = (e) => {
+        if (!isDragging || !startCell) return;
+        isDragging = false;
+        const endCell = getCellFromEvent(e) || startCell;
+        if (validateAndApply(startCell.r, startCell.c, endCell.r, endCell.c, currentPlayer)) {
+            renderBoard(); updateScores(); nextTurn();
+        } else {
+            showToast("합이 10이 아니거나 영역이 부적절합니다.");
+        }
+        dragOverlay.style.display = 'none';
+        document.querySelectorAll('.cell').forEach(el => el.classList.remove('cell-highlight'));
+        startCell = null;
+    }
+
+    boardEl.addEventListener('mousedown', handleStart);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    boardEl.addEventListener('touchstart', handleStart, { passive: false });
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
+    document.getElementById('pass-btn').addEventListener('click', () => {
+        passCount++;
+        showToast("턴을 패스했습니다.");
+        nextTurn();
+    });
+    document.getElementById('reset-btn').addEventListener('click', () => location.reload());
+</script>
+</body>
+</html>
